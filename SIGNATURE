@@ -1,0 +1,46 @@
+This file contains message digests of all files listed in MANIFEST,
+signed via the Module::Signature module, version 0.55.
+
+To verify the content in this distribution, first make sure you have
+Module::Signature installed, then type:
+
+    % cpansign -v
+
+It will check each file's integrity, as well as the signature's
+validity.  If "==> Signature verified OK! <==" is not displayed,
+the distribution may already have been compromised, and you should
+not run its Makefile.PL or Build.PL.
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+SHA1 f94e5097aa7dc3c6fdba946857b0d0c9217ca811 Build.PL
+SHA1 46c3dfd6f03b3c691630c9c4aa2560f5bccfc0f3 Changes
+SHA1 5acbbbb97b29d88de0397c3cffa69276a31b79bb MANIFEST
+SHA1 263f7fb0cd4345c17a54fe0baf1535d7bfa6c483 META.yml
+SHA1 bed6a9bdbffb784e1328ec5b6be06e5317ab22ad Makefile.PL
+SHA1 bc6532b290f4474631f9f5ff72ea628c130a9c06 README
+SHA1 35a3456fd2a01f6bfc86f5cc5fea25d163366ae7 lib/Test/Steering.pm
+SHA1 29d785f2bbeb143e83f6af535c9cde221e9ea868 lib/Test/Steering/Wheel.pm
+SHA1 e891f8ef3de573724d83105d72451ce612f56d6d t/00.load.t
+SHA1 8c548135ab794a423a818f32b0b577845e244353 t/author.t
+SHA1 2c44f578fbd7eb33e952782c28b7477d994cab2c t/conformance.t
+SHA1 2c034641cf3b4e26d16d1f28b1dc2d11d40593c0 t/delegation.t
+SHA1 c68a2947e53e6fdb83fc061817e0717d69320402 t/demux.t
+SHA1 ef187beb9cbbffd6d0cdf2a478790d855040b9c2 t/sample-tests/bailout
+SHA1 d9f0dd7d1ed18775826e04768651d9fca8156528 t/sample-tests/descriptive
+SHA1 e4291958db6e998e0744471bdce1474ec85e0bc1 t/sample-tests/die
+SHA1 83f3b012892cb5d1d3b5df5276e56e2099fbd62c t/sample-tests/no_nums
+SHA1 b96d55a9c1ed574b8578422973a92579ad115834 t/sample-tests/simple
+SHA1 3c1d88ca9bfe22c8a329e55785b1eb1cbb7bc69d t/sample-tests/simple_fail
+SHA1 c3aa71d41d6c3775c95eb63a1ae7e54cf96f4693 t/sample-tests/simple_yaml
+SHA1 bdd09cf1930990e0da69bcd59e551c6b162f24d0 xt/author/pod-coverage.t
+SHA1 0190346d7072d458c8a10a45c19f86db641dcc48 xt/author/pod.t
+SHA1 d7a82b9179dec2e96a02d4abc86b7dfdfae5edbc xt/misc/all-in-one.t
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.7 (Darwin)
+
+iD8DBQFHP3svwoknRJZQnCERAu3GAKDBgh8z5CI4kfjlK+o9ADd6I//kzACgn0Xk
+LPV2SURP/qQKcc86LUABPWw=
+=MwOC
+-----END PGP SIGNATURE-----

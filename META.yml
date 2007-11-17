@@ -1,0 +1,16 @@
+--- #YAML:1.0
+name:                Test-Steering
+version:             0.01
+abstract:            Execute test scripts conditionally
+license:             perl
+generated_by:        ExtUtils::MakeMaker version 6.36_01
+distribution_type:   module
+requires:     
+    IO::Capture:                   0
+    TAP::Harness:                  3.03
+    Test::More:                    0
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
+    version: 1.2
+author:
+    - Andy Armstrong <andy@hexten.net>
