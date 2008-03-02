@@ -2,8 +2,8 @@ package Test::Steering;
 
 use warnings;
 use strict;
-use Test::Steering::Wheel;
 use Exporter;
+use Carp;
 
 =head1 NAME
 
@@ -11,17 +11,16 @@ Test::Steering - Execute test scripts conditionally
 
 =head1 VERSION
 
-This document describes Test::Steering version 0.01
+This document describes Test::Steering version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 our @ISA     = qw(Exporter);
 our @EXPORT;
-our $WHEEL_CLASS = 'Test::Steering::Wheel';
 
 BEGIN {
-    @EXPORT = qw(include_tests end_plan);
+    @EXPORT = qw(include_tests end_plan tests_run);
     my $WHEEL;
     for my $method ( @EXPORT ) {
         no strict 'refs';
@@ -98,10 +97,74 @@ Multiple options hashes may be provided; they will be concatenated.
 Output the trailing plan. Normally there is no need to call C<end_plan>
 directly: it is called on exit.
 
+=head2 C<< tests_run >>
+
+Get a list of tests that have been run.
+
+    my @tests = tests_run();
+
+=head1 OPTIONS
+
+A number of options may be passed.
+
+    use Test::Steering wheel => 'My::Wheel';
+
+=over
+
+=item C<add_prefix>
+
+Add the name of the current test as a prefix to each result's
+description.
+
+=item C<announce>
+
+Output a diagnostic naming each new subtest
+
+=item C<defaults>
+
+A hash containing default options for C<include_tests>.
+
+=item C<wheel>
+
+The name of the support class that will be used. Defaults to
+C<Test::Steering::Wheel>. Use this option to use a custom subclass.
+
+=back
+
 =cut
 
-sub _make_wheel {
-    return $WHEEL_CLASS->new;
+sub _load {
+    my $class = shift;
+    unless ( $INC{$class} || eval "use $class; 1" ) {
+        croak "Can't load $class: $@";
+    }
+    return $class;
+}
+
+{
+    my $wheel_class = 'Test::Steering::Wheel';
+    my %options;
+
+    sub import {
+        my $class = shift;
+        croak "Must supply an even number of arguments" if @_ % 1;
+        my %opts = @_;
+
+        $wheel_class = delete $opts{wheel} || $wheel_class;
+
+        my %valid = map { $_ => 1 } _load( $wheel_class )->option_names;
+        my @bad = grep { !$valid{$_} } keys %opts;
+        croak "Unknown option(s): ", join ', ', sort @bad if @bad;
+
+        %options = %opts;
+
+        # We don't pass any args downwards
+        $class->export_to_level( 1 );
+    }
+
+    sub _make_wheel {
+        return _load( $wheel_class )->new( %options );
+    }
 }
 
 END {

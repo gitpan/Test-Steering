@@ -2,6 +2,7 @@ package Test::Steering::Wheel;
 
 use warnings;
 use strict;
+use Carp;
 use TAP::Harness;
 use Scalar::Util qw(refaddr);
 
@@ -11,16 +12,16 @@ Test::Steering::Wheel - Execute tests and renumber the resulting TAP.
 
 =head1 VERSION
 
-This document describes Test::Steering::Wheel version 0.01
+This document describes Test::Steering::Wheel version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
     use Test::Steering::Wheel;
-    
+
     my $wheel = Test::Steering::Wheel->new;
     $wheel->include_tests( 'xt/vms/*.t' ) if $^O eq 'VMS';
     $wheel->include_tests( 'xt/windows/*.t' ) if $^O =~ 'MSWin32';
@@ -32,36 +33,77 @@ C<Test::Steering::Wheel>.
 
 See L<Test::Steering> for more information.
 
-=head1 INTERFACE 
+=head1 INTERFACE
 
 =head2 C<< new >>
 
 Create a new C<Test::Steering::Wheel>.
 
+=over
+
+=item C<< add_prefix >>
+
+=item C<< announce >>
+
+=item C<< defaults >>
+
+=item C<< harness >>
+
+=back
+
 =cut
 
-sub new {
-    my $class = shift;
-    my %args  = @_;
+{
+    my %DEFAULTS;
 
-    my $self = bless { test_number_adjust => 0, }, $class;
-    return $self;
+    BEGIN {
+        %DEFAULTS = (
+            add_prefix => 0,
+            announce   => 0,
+            defaults   => {},
+            harness    => 'TAP::Harness',
+        );
+
+        for my $method ( keys %DEFAULTS ) {
+            no strict 'refs';
+            *{ __PACKAGE__ . '::' . $method } = sub {
+                my $self = shift;
+                croak "$method may not be set" if @_;
+                return $self->{$method};
+            };
+        }
+    }
+
+    sub new {
+        my $class = shift;
+        croak "Must supply an even number of arguments" if @_ % 1;
+        my %args = ( %DEFAULTS, @_ );
+
+        my @bad = grep { !exists $DEFAULTS{$_} } keys %args;
+        croak "Illegal option(s): ", join ', ', sort @bad if @bad;
+
+        return bless { _test_number_adjust => 0, %args }, $class;
+    }
+
+    # Documentation lower down
+    sub option_names {
+        my $class = shift;
+        return sort keys %DEFAULTS;
+    }
 }
 
-=for private
-
-Output demultiplexer. Handles output associated with multiple parsers.
-If parsers output sequentially no buffering is done. If, however, output
-from multiple parsers is interleaved output from the first encountered
-will be echoed directly and output from all the others will be buffered.
-
-After a parser finishes (calls $done) the next parser to generate output
-will have its buffer flushed and will start output directly.
-
-The upshot of all this is that we output from multiple parsers doing the
-minimum amount of buffering necessary to keep per-parser output ordered.
-
-=cut
+# Output demultiplexer. Handles output associated with multiple parsers.
+# If parsers output sequentially no buffering is done. If, however,
+# output from multiple parsers is interleaved output from the first
+# encountered will be echoed directly and output from all the others
+# will be buffered.
+#
+# After a parser finishes (calls $done) the next parser to generate
+# output will have its buffer flushed and will start output directly.
+#
+# The upshot of all this is that we output from multiple parsers doing
+# the minimum amount of buffering necessary to keep per-parser output
+# ordered.
 
 sub _output_demux {
     my ( $self, $printer, $complete ) = @_;
@@ -72,7 +114,7 @@ sub _output_demux {
     my $finish = sub {
         while ( my $job = shift @completed ) {
             my ( $parser, $buffered ) = @$job;
-            $printer->( @$_ ) for @$buffered;
+            $printer->( $parser, @$_ ) for @$buffered;
             $complete->( $parser );
         }
     };
@@ -85,14 +127,18 @@ sub _output_demux {
 
             unless ( defined $current_id ) {
                 # Our chance to take over...
+                if ( $self->announce ) {
+                    my $name = $self->_name_for_parser( $parser );
+                    print STDERR "# Running $name\n";
+                }
                 if ( my $buffered = delete $queue_for{$id} ) {
-                    $printer->( @$_ ) for @$buffered;
+                    $printer->( $parser, @$_ ) for @$buffered;
                 }
                 $current_id = $id;
             }
 
             if ( $current_id == $id ) {
-                $printer->( $type, $line );
+                $printer->( $parser, $type, $line );
             }
             else {
                 push @{ $queue_for{$id} }, [ $type, $line ];
@@ -121,30 +167,51 @@ sub _output_demux {
     );
 }
 
+sub _name_for_parser {
+    my $self   = shift;
+    my $parser = shift;
+    my $id     = refaddr $parser;
+    return $self->{parser_name}->{$id} unless @_;
+    return $self->{parser_name}->{$id} = shift;
+}
+
 # Like ok
 sub _output_result {
     my ( $self, $ok, $description ) = @_;
     printf( "%sok %d %s\n",
         $ok ? '' : 'not ',
-        ++$self->{test_number_adjust}, $description );
+        ++$self->{_test_number_adjust}, $description );
 }
 
-=for private
-
-Output additional test failures if our subtest had problems.
-
-=cut
+# Output additional test failures if our subtest had problems.
 
 sub _parser_postmortem {
     my ( $self, $parser ) = @_;
 
-    $self->_output_result( 0, "Parse error: $_" )
-      for $parser->parse_errors;
+    my $test = $self->_name_for_parser( $parser );
+
+    my @errs = ();
+
+    push @errs, "$test: Parse error: $_" for $parser->parse_errors;
 
     my ( $wait, $exit ) = ( $parser->wait, $parser->exit );
-    $self->_output_result( 0,
-        "Non-zero status: exit=$exit, wait=$wait" )
+    push @errs, "$test: Non-zero status: exit=$exit, wait=$wait"
       if $exit || $wait;
+
+    if ( @errs ) {
+        $self->_output_result( 0, $_ ) for @errs;
+    }
+    else {
+        $self->_output_result( 1, "$test done" );
+    }
+}
+
+sub _load {
+    my $class = shift;
+    unless ( $INC{$class} || eval "use $class; 1" ) {
+        croak "Can't load $class: $@";
+    }
+    return $class;
 }
 
 =head2 C<< include_tests >>
@@ -159,26 +226,36 @@ Run one or more tests. Wildcards will be expanded.
 sub include_tests {
     my ( $self, @tests ) = @_;
 
-    my %options = ( verbosity => -9 );
+    my %options = ( verbosity => -9, %{ $self->defaults } );
     my @real_tests = ();
 
     # Split options hashes from tests
-    for my $t ( @tests ) {
+    for my $t (
+        map { 'ARRAY' eq ref $_ ? $_ : [ $_, $_ ] }
+        map { ref $_ ? $_ : glob $_ } @tests
+      ) {
         if ( 'HASH' eq ref $t ) {
             %options = ( %options, %$t );
         }
         else {
-            push @real_tests, glob $t;
+            push @real_tests,
+              grep { !$self->{_seen}->{ $_->[1] }++ } $t;
         }
     }
 
-    my $harness = TAP::Harness->new( \%options );
+    my $harness    = _load( $self->harness )->new( \%options );
+    my $add_prefix = $self->add_prefix;
 
     my $printer = sub {
-        my ( $type, $line ) = @_;
-        print "TAP version 13\n" unless $self->{started}++;
+        my ( $parser, $type, $line ) = @_;
+        print "TAP version 13\n" unless $self->{_started}++;
         if ( $type eq 'test' ) {
-            $line =~ s/(\d+)/$1 + $self->{test_number_adjust}/e;
+            $line =~ s/(\d+)/$1 + $self->{_test_number_adjust}/e;
+            if ( $add_prefix ) {
+                my $name = $self->_name_for_parser( $parser );
+                $line =~ s/(\d+)[ \t]*(\S+)/$1: $2/;
+                $line =~ s/(\d+)/$1 $name/;
+            }
         }
         print $line;
     };
@@ -186,7 +263,7 @@ sub include_tests {
     my $complete = sub {
         my $parser    = shift;
         my $tests_run = $parser->tests_run;
-        $self->{test_number_adjust} += $parser->tests_run;
+        $self->{_test_number_adjust} += $parser->tests_run;
     };
 
     my ( $demux, $done, $finish )
@@ -194,7 +271,10 @@ sub include_tests {
 
     $harness->callback(
         made_parser => sub {
-            my $parser = shift;
+            my ( $parser, $test_desc ) = @_;
+
+            $self->_name_for_parser( $parser, $test_desc->[1] );
+
             $parser->callback( plan    => sub { } );
             $parser->callback( version => sub { } );
             $parser->callback(
@@ -207,13 +287,13 @@ sub include_tests {
             $parser->callback(
                 ELSE => sub {
                     my $result = shift;
-                    $demux->( $parser, 'raw', $result->raw, "\n" );
+                    $demux->( $parser, 'raw', $result->raw . "\n" );
                 }
             );
             $parser->callback(
                 EOF => sub {
-                    $self->_parser_postmortem( $parser );
                     $done->( $parser );
+                    $self->_parser_postmortem( $parser );
                 }
             );
         }
@@ -225,22 +305,46 @@ sub include_tests {
 
 =head2 C<end_plan>
 
+Output the trailing plan.
+
 =cut
 
 sub end_plan {
     my $self = shift;
-    if ( my $plan = $self->{test_number_adjust} ) {
+    if ( my $plan = $self->{_test_number_adjust} ) {
         print "1..$plan\n";
-        $self->{test_number_adjust} = 0;
+        $self->{_test_number_adjust} = 0;
     }
 }
 
+=head2 C<< tests_run >>
+
+Get a list of tests that have been run.
+
+    my @tests = $wheel->tests_run();
+
+=cut
+
+sub tests_run {
+    my $self = shift;
+    return sort keys %{ $self->{_seen} || {} };
+}
+
+=head2 C<< option_names >>
+
+Get the names of the supported options to C<new>. Used by L<Test::Steering>
+to validate its arguments.
+
+=cut
+
 1;
+
 __END__
 
 =head1 CONFIGURATION AND ENVIRONMENT
-  
-Test::Steering::Wheel requires no configuration files or environment variables.
+
+Test::Steering::Wheel requires no configuration files or environment
+variables.
 
 =head1 DEPENDENCIES
 
